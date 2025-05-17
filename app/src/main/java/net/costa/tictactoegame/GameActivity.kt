@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import net.costa.tictactoegame.ui.theme.AudiowideFontFamily
 import net.costa.tictactoegame.ui.theme.TicTacToeGameTheme
 
+
 class GameActivity : ComponentActivity() {
     private fun updateScore(player: String) {
         val prefs = getSharedPreferences("game_prefs", MODE_PRIVATE)
@@ -62,6 +63,7 @@ class GameActivity : ComponentActivity() {
         }
     }
 }
+
 
 @SuppressLint("RememberReturnType")
 @Composable
@@ -213,3 +215,6 @@ fun TicTacToeGameScreen(onExit: () -> Unit, onPlayerWin: (Int) -> Unit) {
         }
     }
 }
+
+
+

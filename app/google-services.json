@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "517601622861",
+    "project_id": "tictactoe-b8e35",
+    "storage_bucket": "tictactoe-b8e35.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:517601622861:android:f470995e8ea4a8b1b01504",
+        "android_client_info": {
+          "package_name": "net.costa.tictactoegame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC52SMQG2U3R5rN3nvVMwuiXX8IKdv6fDI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,8 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -21,9 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,8 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.costa.tictactoegame.ui.theme.AudiowideFontFamily
 import net.costa.tictactoegame.ui.theme.TicTacToeGameTheme
-import java.lang.reflect.Array.getInt
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,14 +41,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             TicTacToeGameTheme {
-                ScaffoldExample()
+                MainScreen()
             }
         }
     }
 }
 
 @Composable
-fun Title(){
+fun Title() {
     Text(
         modifier = Modifier
             .fillMaxWidth()
@@ -63,17 +61,16 @@ fun Title(){
     )
 }
 
-@Preview
 @Composable
-fun ScaffoldExample() {
+fun MainScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("game_prefs", Context.MODE_PRIVATE) }
 
     // Load initial scores
     var playerAScore by remember { mutableIntStateOf(prefs.getInt("score_playerA", 0)) }
     var playerBScore by remember { mutableIntStateOf(prefs.getInt("score_playerB", 0)) }
-    fun resetScores(){
-        prefs.edit().apply(){
+    fun resetScores() {
+        prefs.edit().apply {
             putInt("score_playerA", 0)
             putInt("score_playerB", 0)
             apply()
@@ -82,7 +79,7 @@ fun ScaffoldExample() {
         playerBScore = 0
     }
 
-    // Refresh when returning from GameActivity
+    // Refresh when returning from GameActivity or MultiplayerActivity
     DisposableEffect(Unit) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             when (key) {
@@ -96,88 +93,113 @@ fun ScaffoldExample() {
             prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }
     }
+
     Scaffold { innerPadding ->
         Column(
             modifier = Modifier
-                .padding(innerPadding),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(innerPadding)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceAround
         ) {
-            Title()
-            Text(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                text = "Players Score",
-                fontSize = 20.sp,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.displayLarge,
-                fontFamily = AudiowideFontFamily
-            )
-            Row{
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Title()
                 Text(
                     modifier = Modifier
-                        .padding(start = 70.dp),
-                    text = "Player A:",
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    text = "Players Score",
                     fontSize = 20.sp,
+                    textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.displayLarge,
                     fontFamily = AudiowideFontFamily
                 )
-                Text(
-                    modifier = Modifier
-                        .padding(start = 130.dp),
-                    text = "$playerAScore",
-                    fontSize = 20.sp,
-                    style = MaterialTheme.typography.displayLarge,
-                    fontFamily = AudiowideFontFamily
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Player A:",
+                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = AudiowideFontFamily
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "$playerAScore",
+                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = AudiowideFontFamily
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Player B:",
+                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = AudiowideFontFamily
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "$playerBScore",
+                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = AudiowideFontFamily
+                    )
+                }
             }
-            Row {
-                Text(
-                    modifier = Modifier
-                        .padding(start = 70.dp),
-                    text = "Player B:",
-                    fontSize = 20.sp,
-                    style = MaterialTheme.typography.displayLarge,
-                    fontFamily = AudiowideFontFamily
-                )
-                Text(
-                    modifier = Modifier
-                        .padding(start = 130.dp),
-                    text = "$playerBScore",
-                    fontSize = 20.sp,
-                    style = MaterialTheme.typography.displayLarge,
-                    fontFamily = AudiowideFontFamily
-                )
-            }
-            Column (
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ){
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(
                     onClick = {
                         context.startActivity(Intent(context, GameActivity::class.java))
                     },
                 ) {
                     Text(
-                        text="Start Game",
+                        text = "Offline",
                         style = MaterialTheme.typography.displaySmall,
                         fontFamily = AudiowideFontFamily
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(context, MultiplayerActivity::class.java))
+
+                    }
+                ) {
+                    Text(
+                        text = "Multiplayer",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontFamily = AudiowideFontFamily
+                    )
+                }
+                Spacer(modifier = Modifier.height(32.dp))
                 Button(
                     onClick = {
                         resetScores()
                     },
-                    modifier = Modifier.padding(top = 10.dp)
                 ) {
                     Text(
-                        text="Reset Scores",
+                        text = "Reset Scores",
                         style = MaterialTheme.typography.displaySmall,
                         fontFamily = AudiowideFontFamily
                     )
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewMainScreen() {
+    TicTacToeGameTheme {
+        MainScreen()
     }
 }
