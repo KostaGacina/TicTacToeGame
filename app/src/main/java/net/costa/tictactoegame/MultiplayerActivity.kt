@@ -2,6 +2,7 @@ package net.costa.tictactoegame
 
 import android.app.AlertDialog
 import android.app.GameState
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -49,13 +50,16 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
 import java.nio.file.WatchEvent
+import java.util.concurrent.TimeUnit
+
 //192.168.1.19
+
 class MultiplayerActivity : ComponentActivity() {
-    private var webSocket: WebSocket?= null
-    private val serverUrl = "ws://192.168.1.19:8080"
+    private var webSocket: WebSocket? = null
+    private val serverUrl = "ws://tictactoegame-server.onrender.com" // Ensure this matches your server IP
     private var clientId by mutableStateOf("")
     private var playerNumber by mutableIntStateOf(-1)
-    private var gameState by mutableStateOf(List(9) {null as String?})
+    private var gameState by mutableStateOf(List(9) { null as String? })
     private var isMyTurn by mutableStateOf(false)
     private var statusText by mutableStateOf("Connecting to server...")
     private var showGameOverDialog by mutableStateOf(false)
@@ -67,7 +71,7 @@ class MultiplayerActivity : ComponentActivity() {
         enableEdgeToEdge()
         val client = OkHttpClient()
         val request = Request.Builder().url(serverUrl).build()
-        val listener = object: WebSocketListener(){
+        val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 runOnUiThread { statusText = "Connected to server!" }
             }
@@ -76,47 +80,66 @@ class MultiplayerActivity : ComponentActivity() {
                 runOnUiThread {
                     try {
                         val json = JSONObject(text)
-                        when (json.getString("type")){
+                        when (json.getString("type")) {
                             "connected" -> {
                                 clientId = json.getJSONObject("payload").getString("clientId")
                                 playerNumber = json.getJSONObject("payload").getInt("player")
-                                statusText = "You are Player ${if (playerNumber==0) "X" else "O"}."
+                                statusText = "You are Player ${if (playerNumber == 0) "X" else "O"}."
                                 isMyTurn = playerNumber == 0
                             }
-                            "updateGame" ->{
-                                val board = json.getJSONObject("payload").getJSONArray("board")
-                                val turn = json.getJSONObject("payload").getInt("playerTurn")
+                            "updateGame" -> {
+                                val payload = json.getJSONObject("payload")
+                                val board = payload.getJSONArray("board")
+                                val turn = payload.getInt("playerTurn")
                                 val newGameState = mutableListOf<String?>()
-                                for (i in 0 until board.length()){
+                                for (i in 0 until board.length()) {
                                     newGameState.add(board.getString(i).takeIf { it != "null" })
                                 }
                                 gameState = newGameState
-                                isMyTurn = turn == playerNumber
-                                if (json.getJSONObject("payload").getString("winner") != "null"){
-                                    winner = json.getJSONObject("payload").getString("winner")
-                                    gameOverMessage = "${if (winner == (if(playerNumber == 0) "X" else "O")) "You" else winner} won!"
-                                    showGameOverDialog = true
-                                } else if (json.getJSONObject("payload").getBoolean("isDraw")){
-                                    gameOverMessage = "It's a draw!"
-                                    showGameOverDialog = true
-                                }else{
-                                    statusText = if (isMyTurn) "Your turn." else "${if(turn == 0) "X" else "O"}'s turn."
+                                // isMyTurn should only be true if it's their turn AND game is not over
+                                val currentWinner = payload.optString("winner", "null").takeIf { it != "null" }
+                                val currentIsDraw = payload.getBoolean("isDraw")
+                                isMyTurn = turn == playerNumber && currentWinner == null && !currentIsDraw
+
+                                // If updateGame comes *after* a game over, and game is still ongoing, hide dialog
+                                if (currentWinner == null && !currentIsDraw) {
+                                    showGameOverDialog = false
                                     winner = null
+                                    statusText = if (isMyTurn) "Your turn." else "${if (turn == 0) "X" else "O"}'s turn."
+                                } else {
+                                    // Game is over, but updateGame is just reflecting the final state
+                                    // The gameOver message will handle the dialog display
                                 }
                             }
                             "gameOver" -> {
-                                val winnerSymbol = json.getJSONObject("payload").optString("winner")
+                                // This is where the game over dialog is explicitly triggered
+                                val winnerSymbol = json.getJSONObject("payload").optString("winner", "null").takeIf { it != "null" }
                                 val isDraw = json.getJSONObject("payload").optBoolean("isDraw")
-                                if(!winnerSymbol.isNullOrEmpty() && winnerSymbol != "null"){
-                                    gameOverMessage = "${if(winnerSymbol == (if(playerNumber == 0) "X" else "O")) "You" else winnerSymbol} won!"
-                                }else if (isDraw){
+                                if (winnerSymbol != null) {
+                                    winner = winnerSymbol
+                                    gameOverMessage = "${if (winner == (if (playerNumber == 0) "X" else "O")) "You" else winner} won!"
+                                } else if (isDraw) {
                                     gameOverMessage = "It's a draw!"
                                     winner = null
                                 }
                                 showGameOverDialog = true
+                                isMyTurn = false // Ensure no more moves can be made
+                            }
+                            "playerDisconnected" -> {
+                                val disconnectedPlayer = json.getJSONObject("payload").getInt("disconnectedPlayer")
+                                statusText = "Player ${if (disconnectedPlayer == 0) "X" else "O"} disconnected. Game reset."
+                                // The updateGame message will follow this with the reset board
+                                showGameOverDialog = false // Hide dialog immediately on disconnect
+                                winner = null // Clear winner state
+                            }
+                            "playerReassigned" -> {
+                                val newPlayerNumber = json.getJSONObject("payload").getInt("newPlayerNumber")
+                                playerNumber = newPlayerNumber
+                                statusText = "Game reset, you are now Player ${if (playerNumber == 0) "X" else "O"}."
+                                // The game state will be reset and sent via "updateGame" after reassignment
                             }
                         }
-                    }catch (e: Exception){
+                    } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
@@ -135,7 +158,7 @@ class MultiplayerActivity : ComponentActivity() {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                println("Closing: $code $reason")
+                println("Closed: $code $reason")
                 this@MultiplayerActivity.webSocket = null
                 runOnUiThread {
                     statusText = "Disconnected from server."
@@ -159,12 +182,13 @@ class MultiplayerActivity : ComponentActivity() {
                     gameState = gameState,
                     statusText = statusText,
                     isMyTurn = isMyTurn,
-                    onMakeMove = {position ->
+                    onMakeMove = { position ->
                         Log.d("MultiplayerGameScreen", "onMakeMove called with position: $position")
-                        if (isMyTurn && gameState[position] == null && winner == null && !showGameOverDialog){
+                        // Only allow move if it's my turn, cell is empty, and game is not over
+                        if (isMyTurn && gameState[position] == null && winner == null && !showGameOverDialog) {
                             val move = JSONObject().apply {
                                 put("type", "makeMove")
-                                put("payload", JSONObject().apply{
+                                put("payload", JSONObject().apply {
                                     put("position", position)
                                     put("player", playerNumber)
                                 })
@@ -180,11 +204,14 @@ class MultiplayerActivity : ComponentActivity() {
                     showGameOverDialog = showGameOverDialog,
                     gameOverMessage = gameOverMessage,
                     onResetGame = {
+                        // Send a request to the server to reset the game
                         val resetMessage = JSONObject().apply {
-                            put("type", "resetGame")
+                            put("type", "requestGameReset") // New message type
                         }.toString()
                         webSocket?.send(resetMessage)
-                        showGameOverDialog = false
+                        showGameOverDialog = false // Optimistically hide the dialog
+                        winner = null // Clear winner state
+                        // The server will send an "updateGame" with the new board after reset
                     }
                 )
             }
@@ -206,8 +233,8 @@ fun MultiplayerGameScreen(
     onExit: () -> Unit,
     showGameOverDialog: Boolean,
     gameOverMessage: String,
-    onResetGame:() -> Unit
-){
+    onResetGame: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -232,42 +259,42 @@ fun MultiplayerGameScreen(
                     .height(300.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                for (row in 0..2){
+                for (row in 0..2) {
                     Row(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        for (col in 0..2){
-                            val position = row*3 + col
+                        for (col in 0..2) {
+                            val position = row * 3 + col
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clickable(enabled = isMyTurn && gameState[position] == null && !showGameOverDialog){
+                                    .clickable(enabled = isMyTurn && gameState[position] == null && !showGameOverDialog) {
                                         onMakeMove(position)
                                     }
                                     .background(Color.LightGray),
                                 contentAlignment = Alignment.Center
-                            ){
+                            ) {
                                 val content = gameState[position]
-                                if(content == "X"){
+                                if (content == "X") {
                                     Icon(
                                         painter = painterResource(R.drawable.x),
                                         contentDescription = "X",
                                         modifier = Modifier.size(64.dp)
                                     )
-                                }else if (content == "O"){
+                                } else if (content == "O") {
                                     Icon(
                                         painter = painterResource(R.drawable.o),
-                                        contentDescription = "X",
+                                        contentDescription = "O",
                                         modifier = Modifier.size(64.dp)
                                     )
                                 }
-                            }//end of box
+                            } //end of box
                         }
-                    }//end of row
+                    } //end of row
                 }
             }
         }
@@ -284,11 +311,11 @@ fun MultiplayerGameScreen(
             )
         }
 
-        if (showGameOverDialog){
+        if (showGameOverDialog) {
             AlertDialog(
-                onDismissRequest = {},
-                title = {Text("Game Over")},
-                text = {Text(gameOverMessage)},
+                onDismissRequest = { /* Dialog is not dismissible by tapping outside */ },
+                title = { Text("Game Over") },
+                text = { Text(gameOverMessage) },
                 confirmButton = {
                     Button(onClick = onResetGame) {
                         Text("Play Again")
@@ -303,23 +330,3 @@ fun MultiplayerGameScreen(
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
